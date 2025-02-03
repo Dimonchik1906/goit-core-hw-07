@@ -51,7 +51,7 @@ class Record:
         edit_cash = self.find_phone(old_number)
         if edit_cash:
             self.remove_phone(old_number)
-            self.add_phone(new_nuber)
+            self.add_phone(new_number)
             return
         raise ValueError("Phone number not found")
     # додаємо день народдження
