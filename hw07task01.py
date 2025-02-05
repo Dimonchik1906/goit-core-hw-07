@@ -91,17 +91,16 @@ class AddressBook(UserDict):
         for user in self.data.values():
             if user.birthday is None:
                 continue
-            birthday_this_year = user.birthday.date.replace(year=today.year)
+            
+            birthday_date = datetime.strptime(user.birthday.value, "%d.%m.%Y").date()
+            birthday_this_year = birthday_date.replace(year=today.year)
 
             if birthday_this_year < today:
                 birthday_this_year = birthday_this_year.replace(year=today.year + 1)
 
             if 0 <= (birthday_this_year - today).days <= days:
                 if birthday_this_year.weekday() >= 5:  # якщо субота або неділя
-                    birthday_this_year = self.find_next_weekday(
-                        birthday_this_year, 0
-                    )  # Привітання в понеділок
-
+                    birthday_this_year += timedelta(days=(7 - birthday_this_year.weekday()))  # Привітання в понеділок
                 congratulation_date_str = birthday_this_year.strftime("%Y.%m.%d")
                 upcoming_birthdays.append(
                     {
@@ -109,21 +108,24 @@ class AddressBook(UserDict):
                         "congratulation_date": congratulation_date_str,
                     }
                 )
-
         return upcoming_birthdays
 #опрацювання помилок
 def input_error(func):
     def inner(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except Exception:
-            return "Something wrong."
-        except ValueError:
-            return "Give me name and phone please."
+        except ValueError as e:
+            if func.__name__ ==  "add_birthday":
+                return "Invalid date format. Use DD.MM.YYYY"
+            if func.__name__ ==  "add_contact":
+                return "Give me name and 10 didgits phone, please."
+            return f"The entered data is not correcte {e}"
         except IndexError:
             return "Enter the argument for the command."
         except KeyError:
-            return 
+            return "This contact does not exist."
+        except Exception as e:
+            return f"Something went wrong: {e}"
     return inner
 
 @input_error #ддодав врахувавши помилику попереднього завдання
@@ -131,18 +133,21 @@ def parse_input(user_input): #Функція отримання команди �
     cmd, *args = user_input.split()
     cmd = cmd.strip().lower()
     return cmd, *args
-#ддодати контакт
+#додати контакт
 @input_error
 def add_contact(args, book): #Функція додавання нового контакту
     name, phone, *_ = args
     record = book.find(name)
-    message = "Contact updated."
+    message = f"Contact {name} updated."
     if record is None:
         record = Record(name)
         book.add_record(record)
-        message = "Contact added."
+        message = f"Contact {name} added."
     if phone:
-        record.add_phone(phone)
+        if not record.find_phone(phone):
+            record.add_phone(phone)
+        else:
+            return f"Phone {phone} is already in the contact {name}"
     return message
 #зміна номеру телефону
 @input_error
@@ -151,7 +156,7 @@ def change_contact(args, book): #Функція зміну номеру
     record = book.find(name)
     if record:
         record.edit_phone(old_phone, new_phone)
-        return "Contact updated."
+        return f"Contact for {name} updated."
     else:
         raise KeyError
 #показати номер телефону
@@ -165,7 +170,7 @@ def show_phone(args,book):
         raise KeyError
     #показати всі контакти
 def show_all(book): #Функція показу всіх контактів
-    return "\n".join([str(record) for record in book.data.values()])
+    return "\n\n".join([str(record) for record in book.data.values()]) if book.data else "No contacts found."
 #доддати день народження
 @input_error
 def add_birthday(args, book):
@@ -173,7 +178,7 @@ def add_birthday(args, book):
     record = book.find(name)
     if record:
         record.add_birthday(birthday)
-        return "Birthday added."
+        return f"Birthday for {name} added: {birthday}"
     else:
         raise KeyError
     # Показ дати дня народження
@@ -181,7 +186,9 @@ def add_birthday(args, book):
 def show_birthday(args, book):
     (name,) = args
     record = book.find(name)
-    return str(record.birthday)
+    if record and record.birthday:
+        return str(record.birthday)
+    return "Birthday not found for this contact."
 
 
 def main(): #Функція обробки команд
@@ -219,7 +226,7 @@ def main(): #Функція обробки команд
 
         elif command == "birthdays":
             birthdays = book.get_upcoming_birthdays()
-            if not len(birthdays):
+            if not birthdays:
                 print("There are no upcoming birthdays.")
                 continue
             for day in birthdays:
